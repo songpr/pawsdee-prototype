@@ -1,0 +1,43 @@
+name: Remove prototype preview
+
+# When a feature branch is deleted, drop its /<branch>/ folder from gh-pages so
+# stale previews don't pile up. `delete` events always run the workflow from the
+# default branch (main), so this file only needs to exist on main.
+
+on:
+  delete:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.event.ref_type == 'branch' && github.event.ref != 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Remove deleted branch's preview folder
+        working-directory: pages
+        env:
+          # Untrusted ref name passed via env (never interpolated into the script).
+          BRANCH: ${{ github.event.ref }}
+        run: |
+          set -euo pipefail
+          # Defense in depth: git already forbids '..' in ref names; refuse anyway.
+          case "$BRANCH" in
+            ''|*..*|/*) echo "Refusing unexpected branch name."; exit 0 ;;
+          esac
+          if [ -d "$BRANCH" ]; then
+            git config user.name  'github-actions[bot]'
+            git config user.email 'github-actions[bot]@users.noreply.github.com'
+            git rm -r --quiet "$BRANCH"
+            git commit -m "Remove preview for deleted branch"
+            git push origin gh-pages
+          else
+            echo "No preview folder to remove."
+          fi

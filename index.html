@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PawsDee — Prototypes</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #faf9f5; color: #1a1a1a; min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .wrap { width: 100%; max-width: 480px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .sub { color: #666; font-size: 14px; margin-bottom: 24px; }
+    a.card { display: flex; align-items: center; gap: 14px; text-decoration: none;
+      background: #fff; border: 1px solid #ececec; border-radius: 14px;
+      padding: 16px 18px; margin-bottom: 12px; color: inherit;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: transform .12s, box-shadow .12s; }
+    a.card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+    .badge { width: 40px; height: 40px; border-radius: 10px; background: #06C755;
+      display: grid; place-items: center; color: #fff; font-weight: 700; flex: 0 0 auto;
+      font-size: 13px; }
+    .meta { flex: 1; }
+    .meta .name { font-weight: 600; font-size: 15px; }
+    .meta .desc { color: #888; font-size: 13px; margin-top: 2px; }
+    .chev { color: #ccc; font-size: 20px; }
+    .note { color: #aaa; font-size: 12px; margin-top: 18px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>PawsDee — Prototypes</h1>
+    <p class="sub">Playable design prototypes. Each feature publishes a live preview.</p>
+
+    <a class="card" href="003-design-driven-line-booking/">
+      <div class="badge">LINE</div>
+      <div class="meta">
+        <div class="name">LINE Booking Journey</div>
+        <div class="desc">Playable end-to-end LINE booking flow · feature 003</div>
+      </div>
+      <div class="chev">›</div>
+    </a>
+
+    <p class="note">
+      Previews are published per feature branch to <code>/&lt;branch-name&gt;/</code>
+      automatically. This gallery (served from <code>main</code>) links the live previews;
+      it is a preview surface, not production.
+    </p>
+  </div>
+</body>
+</html>

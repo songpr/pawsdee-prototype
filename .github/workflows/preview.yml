@@ -1,0 +1,68 @@
+name: Publish prototype preview
+
+# Publishes each branch to the shared gh-pages site:
+#   main      -> site root   (this gallery + any promoted prototypes)
+#   <feature> -> /<feature>/  (a live, playable preview for user feedback)
+#
+# Branch publishes never clobber each other:
+#   - feature branches sync into their own /<branch>/ folder with --delete
+#     (so removing a file in the prototype removes it from the preview),
+#   - main syncs into the root WITHOUT --delete (so it preserves every
+#     /<branch>/ preview folder).
+# First-party actions only (actions/checkout) + git/rsync — no third-party deploy action.
+
+on:
+  push:
+    branches: ['**']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Sync content into destination
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            DEST="pages"
+            DELETE=""          # preserve sibling /<branch>/ preview folders
+          else
+            DEST="pages/${GITHUB_REF_NAME}"
+            DELETE="--delete"  # clean removed files within this preview only
+          fi
+          mkdir -p "$DEST"
+          rsync -a $DELETE \
+            --exclude '.git' --exclude '.github' --exclude '.gitignore' --exclude 'README.md' \
+            src/ "$DEST"/
+          touch pages/.nojekyll
+
+      - name: Commit & push to gh-pages
+        working-directory: pages
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+          else
+            git commit -m "Publish ${GITHUB_REF_NAME} (${GITHUB_SHA})"
+            git push origin gh-pages
+          fi

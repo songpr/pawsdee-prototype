@@ -47,14 +47,16 @@
     <div class="d" id="when"></div>
   </div>
   <div class="priv">🔒 <span>บันทึก<strong>เฉพาะการเตือนเวลา</strong> ไม่มีข้อมูลส่วนตัว · Reminder time only — no personal data.</span></div>
+  <div id="btns">
   <a class="btn" id="add" href="#">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4M12 14v4M10 16h4"/></svg>
-    เพิ่มลงปฏิทิน · Add to calendar
+    <span id="addLabel">เพิ่มลงปฏิทิน · Add to calendar</span>
   </a>
   <a class="btn sec" id="g" href="#" target="_blank" rel="noopener">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
     Google Calendar
   </a>
+  </div>
   <div class="peek" id="peek">ดูข้อมูล .ics · View .ics payload</div>
   <pre id="ics" hidden></pre>
 </main>
@@ -91,12 +93,13 @@
 
   var blobURL = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
   var add = document.getElementById('add');
+  var addLabel = document.getElementById('addLabel');
   add.href = blobURL;
   add.setAttribute('download', 'pawsdee-reminder.ics');
   // iOS Safari intercepts a navigation to a text/calendar blob and opens Calendar.app.
+  var ua = navigator.userAgent;
+  var isIOSSafari = /iPhone|iPad|iPod/i.test(ua) && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Line\//i.test(ua);
   add.addEventListener('click', function (e) {
-    var ua = navigator.userAgent;
-    var isIOSSafari = /iPhone|iPad|iPod/i.test(ua) && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Line\//i.test(ua);
     if (isIOSSafari) { e.preventDefault(); window.location.href = blobURL; }
   });
 
@@ -108,6 +111,23 @@
   });
   document.getElementById('g').href = 'https://calendar.google.com/calendar/render?' + g.toString();
 
+  // Chrome/Edge (any platform) don't auto-open Calendar.app on a .ics blob — only iOS Safari
+  // does. Found 2026-07-04 on a real device: LINE bounced to the device's default browser
+  // (Edge), and the .ics button silently downloaded a file with no obvious next step, while
+  // Google Calendar worked in one tap. journey.jsx's addToCalendar() already prioritizes
+  // Google Calendar for these browsers (finding #6) — this lander had drifted out of sync
+  // with that fix (same class of gap as gotcha 0037). Reorder + relabel so the button that
+  // actually works in ONE tap is primary, and the .ics button's label matches what it really
+  // does here (download a file) instead of promising "add to calendar."
+  if (!isIOSSafari && /CriOS|EdgiOS|Chrome|Edg\//i.test(ua)) {
+    var btns = document.getElementById('btns');
+    var gBtn = document.getElementById('g');
+    gBtn.classList.remove('sec');
+    add.classList.add('sec');
+    addLabel.textContent = 'ดาวน์โหลดไฟล์ .ics · Download .ics file';
+    btns.insertBefore(gBtn, add); // Google Calendar first — the one-tap path on this browser
+  }
+
   var peek = document.getElementById('peek'), pre = document.getElementById('ics');
   peek.addEventListener('click', function () {
     pre.hidden = !pre.hidden;
@@ -115,5 +135,14 @@
   });
 })();
 </script>
+<!-- SOURCE OF TRUTH — do NOT run /design-sync against this file (ADR-012; see journey.jsx's
+     note for the full rationale). The repo is canonical for the live journey; the prototype
+     preview is derived from here via mds-crm scripts/publish-preview.sh. Historical record of
+     the engineering-origin divergence from the original T060 Claude Design export:
+       1. #btns wrapper + <span id="addLabel"> extraction + Chrome/Edge detection
+          (2026-07-04, T022/gotcha 0040) — on Chrome/Edge, reorders the two buttons so
+          Google Calendar is primary and relabels the .ics button "Download .ics file"
+          (it doesn't auto-open Calendar.app outside iOS Safari, so the original label
+          promised something it didn't do there). -->
 </body>
 </html>

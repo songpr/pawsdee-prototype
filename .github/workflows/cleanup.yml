@@ -1,7 +1,13 @@
 name: Remove prototype preview
 
-# When a feature branch is deleted, drop its /<branch>/ folder from gh-pages so
-# stale previews don't pile up. `delete` events always run the workflow from the
+# Backstop for an ABANDONED branch (one that's deleted without ever merging to
+# main): drops its /<branch>/ folder from gh-pages so stale previews don't pile
+# up. A branch that DOES merge gets its folder retired at merge time instead,
+# by preview.yml's "Retire the merged branch's own preview folder" step — this
+# workflow's condition (github.event.ref != 'main') means it still fires on a
+# post-merge branch deletion too, but by then preview.yml has usually already
+# removed the folder, so this is typically a no-op ("No preview folder to
+# remove") in that case. `delete` events always run the workflow from the
 # default branch (main), so this file only needs to exist on main.
 
 on:

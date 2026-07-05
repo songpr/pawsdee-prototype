@@ -1,14 +1,29 @@
 name: Publish prototype preview
 
-# Publishes each branch to the shared gh-pages site:
-#   main      -> site root   (this gallery + any promoted prototypes)
-#   <feature> -> /<feature>/  (a live, playable preview for user feedback)
+# Publishes to the shared gh-pages site:
+#   main      -> site ROOT = the latest MERGED (shipped) preview, always current.
+#   <feature> -> /<feature>/ = that branch's live, in-progress preview, for
+#                comparing against root before it merges.
+#
+# Root is never a gallery of links (that model is retired) -- it IS whatever's
+# on main right now, byte-for-byte.
 #
 # Branch publishes never clobber each other:
 #   - feature branches sync into their own /<branch>/ folder with --delete
 #     (so removing a file in the prototype removes it from the preview),
 #   - main syncs into the root WITHOUT --delete (so it preserves every
-#     /<branch>/ preview folder).
+#     /<branch>/ preview folder that hasn't merged yet).
+#
+# A branch's own /<branch>/ folder is retired two ways:
+#   1. On merge to main (this workflow, "Retire the merged branch's own
+#      preview folder" step below) -- content is now at root, so the
+#      per-branch copy is an immediate duplicate. Parses the NNN-slug branch
+#      name out of this project's own merge-commit convention
+#      ("merge spec NNN (NNN-slug) -- ..."); a merge commit that doesn't
+#      match is left alone (nothing to retire).
+#   2. On branch deletion (cleanup.yml) -- covers an abandoned branch that
+#      never merged.
+#
 # First-party actions only (actions/checkout) + git/rsync — no third-party deploy action.
 
 on:
@@ -52,6 +67,33 @@ jobs:
             --exclude '.git' --exclude '.github' --exclude '.gitignore' --exclude 'README.md' \
             src/ "$DEST"/
           touch pages/.nojekyll
+
+      - name: Retire the merged branch's own preview folder (superseded by root)
+        if: github.ref_name == 'main'
+        working-directory: pages
+        run: |
+          set -euo pipefail
+          # This project's merge-commit convention: "merge spec NNN (NNN-slug) — ...".
+          # Extract the NNN-slug branch name so its now-redundant /<branch>/ preview
+          # (content now lives at root) retires as PART of the merge -- not only on
+          # branch deletion (cleanup.yml), so a branch left undeleted after merging
+          # doesn't leave a stale duplicate preview live indefinitely.
+          MSG="$(git -C ../src log -1 --format=%B)"
+          BRANCH="$(printf '%s' "$MSG" | grep -oE '\([0-9]{3}-[a-z0-9-]+\)' | head -1 | tr -d '()')"
+          if [ -z "$BRANCH" ]; then
+            echo "No NNN-slug branch reference in the merge commit message; nothing to retire."
+            exit 0
+          fi
+          # Defense in depth, mirrors cleanup.yml's guard on the same untrusted-ish input.
+          case "$BRANCH" in
+            ''|*..*|/*) echo "Refusing unexpected branch name: $BRANCH"; exit 0 ;;
+          esac
+          if [ -d "$BRANCH" ]; then
+            git rm -r --quiet "$BRANCH"
+            echo "Retired $BRANCH/ (staged for the commit below)."
+          else
+            echo "No preview folder for $BRANCH to retire."
+          fi
 
       - name: Commit & push to gh-pages
         working-directory: pages

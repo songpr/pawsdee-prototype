@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>เพิ่มลงปฏิทิน · PawsDee reminder</title>
+<!-- MOCK SERVER-HOSTED REMINDER LANDER
+     Static file (works on GitHub Pages). Rebuilds the PII-free .ics from query
+     params (?d=YYYY-MM-DD&t=HH:MM) — NO personal data ever travels in the URL.
+     Reached from LINE via ...add.html?...&openExternalBrowser=1 → LINE pops this
+     out to Safari, where the text/calendar intercept opens Apple Calendar. -->
+<style>
+  :root { --teal: #0d9488; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #f1f5f9; padding: 20px;
+    font-family: "Noto Sans Thai", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: #0f172a;
+  }
+  .card {
+    background: #fff; width: 100%; max-width: 420px; border-radius: 22px;
+    box-shadow: 0 20px 60px rgba(15,23,42,.15);
+    padding: 26px 22px calc(22px + env(safe-area-inset-bottom));
+  }
+  .logo { width: 54px; height: 54px; border-radius: 50%; background: #ecfdf5; display: flex; align-items: center; justify-content: center; font-size: 27px; margin: 0 auto 14px; }
+  h1 { font-size: 19px; font-weight: 800; text-align: center; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: #64748b; text-align: center; margin: 0 0 18px; }
+  .when { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 13px 15px; margin-bottom: 14px; text-align: center; }
+  .when .t { font-size: 15px; font-weight: 700; }
+  .when .d { font-size: 13px; color: #475569; margin-top: 3px; }
+  .priv { display: flex; gap: 8px; align-items: flex-start; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 12px; padding: 9px 11px; font-size: 12px; line-height: 1.45; margin-bottom: 16px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 52px; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; text-decoration: none; margin-bottom: 10px; color: #fff; background: var(--teal); }
+  .btn.sec { background: #fff; border: 1.5px solid #cbd5e1; color: #1e293b; }
+  .btn svg { width: 20px; height: 20px; }
+  .peek { font-size: 12px; color: #64748b; text-align: center; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; margin-top: 2px; }
+  pre { background: #0f172a; color: #cbd5e1; border-radius: 12px; padding: 12px; font-size: 11px; line-height: 1.5; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="logo">🐾</div>
+  <h1>เพิ่มลงปฏิทิน</h1>
+  <p class="sub">Add your appointment reminder</p>
+  <div class="when">
+    <div class="t">🔔 เตือนนัดหมาย PawsDee · PawsDee appointment</div>
+    <div class="d" id="when"></div>
+  </div>
+  <div class="priv">🔒 <span>บันทึก<strong>เฉพาะการเตือนเวลา</strong> ไม่มีข้อมูลส่วนตัว · Reminder time only — no personal data.</span></div>
+  <a class="btn" id="add" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4M12 14v4M10 16h4"/></svg>
+    เพิ่มลงปฏิทิน · Add to calendar
+  </a>
+  <a class="btn sec" id="g" href="#" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+    Google Calendar
+  </a>
+  <div class="peek" id="peek">ดูข้อมูล .ics · View .ics payload</div>
+  <pre id="ics" hidden></pre>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function tomorrow() { var d = new Date(); d.setDate(d.getDate() + 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  var date = /^\d{4}-\d{2}-\d{2}$/.test(q.get('d') || '') ? q.get('d') : tomorrow();
+  var time = /^\d{2}:\d{2}$/.test(q.get('t') || '') ? q.get('t') : '10:00';
+  var start = new Date(date + 'T' + time + ':00');
+  var end = new Date(start.getTime() + 30 * 60000);
+  function fmt(d) { return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; }
+
+  // PII-FREE reminder — identical payload to the in-app sheet.
+  var ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//PawsDee//Reminder//TH', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    'UID:' + Date.now() + '@pawsdee',
+    'DTSTAMP:' + fmt(new Date()),
+    'DTSTART:' + fmt(start),
+    'DTEND:' + fmt(end),
+    'SUMMARY:🐾 เตือนนัดหมาย PawsDee · PawsDee appointment',
+    'DESCRIPTION:ดูรายละเอียดนัดหมายของคุณใน LINE · See your appointment details in LINE',
+    'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:เตือนนัดหมาย PawsDee', 'TRIGGER:-PT2H', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR'
+  ].join('\r\n');
+
+  var when = '';
+  try { when = start.toLocaleString('th-TH', { dateStyle: 'long', timeStyle: 'short' }); }
+  catch (e) { when = start.toLocaleString(); }
+  document.getElementById('when').textContent = when;
+  document.getElementById('ics').textContent = ics;
+
+  var blobURL = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+  var add = document.getElementById('add');
+  add.href = blobURL;
+  add.setAttribute('download', 'pawsdee-reminder.ics');
+  // iOS Safari intercepts a navigation to a text/calendar blob and opens Calendar.app.
+  add.addEventListener('click', function (e) {
+    var ua = navigator.userAgent;
+    var isIOSSafari = /iPhone|iPad|iPod/i.test(ua) && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Line\//i.test(ua);
+    if (isIOSSafari) { e.preventDefault(); window.location.href = blobURL; }
+  });
+
+  var g = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: 'เตือนนัดหมาย PawsDee · PawsDee appointment',
+    dates: fmt(start) + '/' + fmt(end),
+    details: 'ดูรายละเอียดนัดหมายของคุณใน LINE · See your appointment details in LINE'
+  });
+  document.getElementById('g').href = 'https://calendar.google.com/calendar/render?' + g.toString();
+
+  var peek = document.getElementById('peek'), pre = document.getElementById('ics');
+  peek.addEventListener('click', function () {
+    pre.hidden = !pre.hidden;
+    peek.textContent = pre.hidden ? 'ดูข้อมูล .ics · View .ics payload' : 'ซ่อน · Hide';
+  });
+})();
+</script>
+</body>
+</html>

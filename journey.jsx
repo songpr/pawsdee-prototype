@@ -85,12 +85,19 @@ function maskPhone(p) {
   if (d.length < 4) return p || '08x-xxx-5678';
   return `${d.slice(0, 2)}x-xxx-${d.slice(-4)}`;
 }
+// Format a Date as YYYY-MM-DD in the *local* calendar. Never use toISOString() for a
+// date-only value: it renders the UTC day, so at UTC+7 (Thailand) local midnight is still
+// the previous day in UTC and every date shifts back one.
+function localISO(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 // B2 fix — find the next open day (skips clinic closed days)
 function nextOpenISO(fromISO) {
   const d = new Date((fromISO || todayISO()) + 'T00:00:00');
   for (let i = 1; i <= 14; i++) {
     d.setDate(d.getDate() + 1);
-    if (!CLINIC.closedDays.includes(d.getDay())) return d.toISOString().split('T')[0];
+    if (!CLINIC.closedDays.includes(d.getDay())) return localISO(d);
   }
   return fromISO;
 }
@@ -332,9 +339,9 @@ function openCalSheet(form) {
 const futureISO = (addDays) => {
   const d = new Date();
   d.setDate(d.getDate() + addDays);
-  return d.toISOString().split('T')[0];
+  return localISO(d);
 };
-const todayISO = () => new Date().toISOString().split('T')[0];
+const todayISO = () => localISO(new Date());
 
 // Generate realistic slots for a date. A couple are "full" (2/2 booked).
 function buildSlots(seed) {
@@ -490,9 +497,13 @@ function BookingScreen({ slug, form, setForm, onSubmit }) {
     setForm((f) => ({ ...f, date, time:'' }));
   };
 
-  // B2 fix — jump to the next open day from a closed/empty day
+  // B2 fix — jump to the next open day from a closed/empty day. The server's nearestOpenDate
+  // wins when present (it knows the real calendar); nextOpenISO is the offline fallback. The
+  // CTA label must render this same value — computing it twice let the label advertise a day
+  // the button didn't go to.
+  const nextOpenDate = nearestOpen || nextOpenISO(form.date);
   const jumpToNextOpen = () => {
-    const d = nearestOpen || nextOpenISO(form.date);
+    const d = nextOpenDate;
     setForm((f) => ({ ...f, date:d, time:'' }));
   };
 
@@ -639,7 +650,7 @@ function BookingScreen({ slug, form, setForm, onSubmit }) {
                 </span>
               </div>
               <button type="button" onClick={jumpToNextOpen} style={{ alignSelf:'flex-start', display:'inline-flex', alignItems:'center', gap:6, minHeight:40, padding:'8px 14px', fontSize:13, fontWeight:600, fontFamily:'var(--font-en)', color:'white', background:'var(--teal-600)', border:'none', borderRadius:'var(--radius-md)', cursor:'pointer' }}>
-                <Icon name="arrow-right" size={14}/> วันว่างถัดไป · Next open: {FMT_DOW(nextOpenISO(form.date))} {FMT_DATE(nextOpenISO(form.date))}
+                <Icon name="arrow-right" size={14}/> วันว่างถัดไป · Next open: {FMT_DOW(nextOpenDate)} {FMT_DATE(nextOpenDate)}
               </button>
             </div>
           : <div className="slot-scroll" style={{ display:'flex', gap:5, overflowX:'auto', paddingBottom:2, WebkitOverflowScrolling:'touch' }}>
@@ -1801,6 +1812,14 @@ function PlayApp() {
 //      (key={`bs-${slotRefresh}`}) and re-fetch slots on every re-entry to the booking stage
 //      (2026-07-03, UAT finding #1 — a just-booked slot kept showing as available). Also
 //      threads alreadyLinked through ReviewScreen's onConfirm into form state (see #6).
+//  10. localISO() replaces toISOString() in every date-ONLY helper — nextOpenISO, todayISO,
+//      futureISO (2026-07-09, gotcha 0041). At UTC+7 local midnight is still the previous day
+//      in UTC, so "next open day" returned the closed day it was escaping and the CTA
+//      dead-ended for every Thai user. The .ics fmt() helpers keep toISOString(): a DTSTART
+//      really is a UTC instant.
+//  11. BookingScreen hoists one nextOpenDate = nearestOpen || nextOpenISO(form.date) and uses
+//      it for BOTH the "Next open" label and jumpToNextOpen (2026-07-09, gotcha 0041) —
+//      computing it twice let the label advertise a day the button never navigated to.
 //
 // (add.html carries the same note at its end. The prototype preview is generated from this
 // file — see mds-crm scripts/publish-preview.sh + CONTRIBUTING-UI §8.)

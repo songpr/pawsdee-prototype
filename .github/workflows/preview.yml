@@ -79,7 +79,9 @@ jobs:
           # branch deletion (cleanup.yml), so a branch left undeleted after merging
           # doesn't leave a stale duplicate preview live indefinitely.
           MSG="$(git -C ../src log -1 --format=%B)"
-          BRANCH="$(printf '%s' "$MSG" | grep -oE '\([0-9]{3}-[a-z0-9-]+\)' | head -1 | tr -d '()')"
+          # `|| true`: an ordinary (non-merge) commit on main has no NNN-slug, so grep exits 1
+          # and, under `pipefail`, would kill the step before the guard below could report it.
+          BRANCH="$(printf '%s' "$MSG" | grep -oE '\([0-9]{3}-[a-z0-9-]+\)' | head -1 | tr -d '()' || true)"
           if [ -z "$BRANCH" ]; then
             echo "No NNN-slug branch reference in the merge commit message; nothing to retire."
             exit 0
